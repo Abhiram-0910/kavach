@@ -107,5 +107,5 @@ Go to GCP console → Billing → Unlink the billing account from kavach-501620 
 - AASIST > RawNet2 for audio (better ASVspoof 2019 benchmark)
 - PhishTank data: cache locally to avoid per-request API calls
 - Fake social profile v1 will need calibration after first real test run
-- Marketing site (React Three Fiber): dark theme, 3D shield animation, particle effects — build last
+- Marketing site (React Three Fiber): full 5-section page, quality-passed in `marketing/` (hero, honeypot, problem, features, how-it-works/CTA) + nav rail + footer, Sessions 14–15. Real-hardware FPS confirmed (115fps hero, 144fps honeypot). Not yet done: Task 11 app frontend.
 - Business model: freemium consumer + B2B API tier (banks/fintech license detection engine)

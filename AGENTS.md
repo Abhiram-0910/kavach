@@ -9,7 +9,8 @@ Claude reads this at the START of every new session to understand what happened 
 **Last updated:** 2026-07-07
 **Current branch:** master
 **Overall status:** ✅ ALL 10 BACKEND TASKS COMPLETE — 199/199 tests passing.
-Tasks 1–10: FastAPI skeleton, image/video classifier, audio classifier, document OCR verifier, honeypot simulator, phishing checker, social profile checker, digital arrest recognizer, complaint assistant, safe-word vault. Next: Task 11 — React + Tailwind frontend (5 surfaces).
+Tasks 1–10: FastAPI skeleton, image/video classifier, audio classifier, document OCR verifier, honeypot simulator, phishing checker, social profile checker, digital arrest recognizer, complaint assistant, safe-word vault.
+`marketing/` (Vite+React+R3F+GSAP) complete end-to-end and quality-passed: hero (Signal Scanner shader, organic reveal + depth layers) + honeypot (dense particle swarm, network lines, dramatic closing-net) + problem (per-item mini-shader glyphs) + features (same glyphs inverted + proximity glow) + how-it-works (connecting flow line) + nav rail + footer — see Session 14/15. Real-hardware FPS confirmed excellent (115/144fps). Task 11 (app frontend, 5 surfaces) not yet started.
 
 ---
 
@@ -249,6 +250,86 @@ Tasks 1–10: FastAPI skeleton, image/video classifier, audio classifier, docume
 
 **Next session should start with:**
 - Task 6: Phishing Domain Checker (`/check/phishing`)
+
+---
+
+### Session 15 — 2026-07-07
+**Goal:** Full quality rebuild pass on `marketing/` — Abhi flagged the site as not meeting the bar; fixed per-section with a screenshot after each before moving on
+
+**Follow-up fixes (same session, final pass on `marketing/`):**
+- [x] NavRail bug, root-caused not guessed: not a stuck border/focus-ring — `nav` is `position: fixed`, so if a user clicks a nav item then scrolls via mouse wheel without moving the cursor, native `:hover` stays locked onto whatever item the cursor geometrically sits over, completely decoupled from scroll position. `group-hover:text-white/70` was bright enough to read as "active" at a glance. Fixed by making hover a small, clearly-different cue (bump to `/45` + an underline) instead of approaching the active state's full white — reproduced with Playwright (click "why", scroll to How, screenshot) both before and after.
+- [x] Honeypot hard rectangular field edge: particles were sampled uniformly within a fixed `780×560` box — uniform density right up to a wall, then nothing. Replaced with `size.width/height`-based full-bleed spread (via `useThree()`) and a sum-of-three-signed-uniforms distribution (cheap triangular/bell falloff — density peaks centrally and fades smoothly outward, no hard cutoff). Confirmed via screenshot: field now extends to all four edges with no visible seam, in both the rest state and mid-closing-net.
+- [x] Honeypot text legibility recurrence: same class of bug as the hero's fix in Session 14, new instance — added a scrim, but used a **radial** gradient anchored top-left (not the hero's linear one) since honeypot's layout is side-by-side on desktop but stacked on mobile; a pure left-right gradient would've left the right half of stacked mobile text unprotected.
+
+**Completed:**
+- [x] **Critical bug (real root cause, not GSAP):** Features section text was rendering near-invisible. `getComputedStyle` showed the note tags at `rgb(23,24,27)` on a `rgb(14,14,16)` background — a color bug, not opacity. `index.css` defined `--color-muted: #8a8a86` for "dim text," but shadcn's own `@theme inline` block *also* declares `--color-muted` (reserved for a muted background surface, mapped to `--color-ink-2`). CSS custom properties resolve live at the cascade — the later declaration silently won everywhere `text-muted` was used (`FeaturesSection.tsx`, footer in `App.tsx`). Renamed my token to `--color-dim` to stop colliding.
+- [x] Hardened the reveal mechanism regardless of root cause: new `useStaggerReveal` hook — try/catch around GSAP, `onComplete` clears inline styles back to CSS default, a hard `setTimeout` forces full visibility no matter what. `prefers-reduced-motion` skips animation entirely. Verified with actual failure-injection (monkey-patched `IntersectionObserver` to never fire) — content stayed visible throughout. Migrated Problem/Features/How-It-Works off the old unhardened `useRevealOnView` (deleted).
+- [x] Hero shader: organic wobbling reveal boundary (angle-based noise, not a perfect circle), a rotating sonar-sweep line inside the zone, a finer inner lattice drifting at a different rate than the outer noise (parallax depth cue), sparse flickering data-blips — all inside the reveal zone for real depth/texture.
+- [x] Honeypot swarm: density way up (5000/2000 particles, 780×460 spread down from 900×560), custom `ShaderMaterial` with per-vertex `aSize` (bigger + brighter for fast-moving particles — reads as glow), a 2-echo motion-trail buffer (`positions.copyWithin` shift, `TRAIL_STEPS=2`), spatial-hash grid neighbor connections rendered as `LineSegments` (real "network" look, capped at `count × 3` segments so it's O(n) not O(n²)), and closing-net physics rebuilt as a radial spring toward a ring radius + tangential force (orbits and visibly tightens, rather than the old straight-line pull that just clumped).
+- [x] Problem section fully rebuilt: `ThreatGlyph` — a raw-WebGL (no three.js) small shader component, 5 variants (waveform/scanlines/text-lines/rings/pulse), each corrupting from clean teal into amber static on hover, echoing the hero metaphor at small scale. Giant faint "03" watermark numeral added to tie visually to Features' index-number motif.
+- [x] Features section: reused `ThreatGlyph` with inverted direction (rests partially noisy, resolves clean on hover — mirrors the hero's own reveal direction rather than contradicting it), extracted `FeatureRow` subcomponent so `useProximityGlow` (new hook — continuous cursor-distance-driven glow via a `--proximity` CSS var, not just binary `:hover`) could be called per-instance correctly.
+- [x] How It Works: added an actual connecting flow visual between the 3 steps — a line that draws in (`scaleX` 0→1) after the steps stagger in, then a looping glowing pulse dot travels along each segment continuously. Added per-step `ThreatGlyph`s and hover states (text-shadow glow, slight translate) — previously completely static once revealed.
+- [x] Sitewide: added a `.grain` CSS class (SVG feTurbulence data-URI, `mix-blend-mode: overlay`, ~5% opacity) to Problem/Features/How-It-Works so the plain sections share the hero's static/noise vocabulary instead of reading as a flat, disconnected site.
+- [x] **Caught and fixed a WebGL-context risk I introduced:** adding 13 always-mounted `ThreatGlyph` canvases (5+5+3) alongside the managed hero/honeypot scene pushed simultaneous WebGL contexts to 14 — safe on this hardware but close to typical browser ceilings (Chrome ~16, mobile Safari as low as ~8). Added `useSectionInView` (generous-but-bounded `rootMargin: 40%`) so each section's glyphs unmount (freeing their context) once genuinely off-screen; worst-case simultaneous total dropped from 14 to 10, and the common case (viewing one section) is 1–6.
+
+**Decisions made:**
+- The "one canvas at a time" invariant from Session 14 was specifically about the two full-bleed R3F scenes (hero/honeypot), managed by `CanvasLifecycle`. The small `ThreatGlyph` decorative canvases are a deliberately separate category — raw WebGL (no three.js, keeps them out of the lazy R3F bundle), not gated by the single-active-slot system, but now bounded by `useSectionInView` for context-count safety.
+- `ThreatGlyph`'s corruption direction is a prop (`restValue`/`activeValue`), not hardcoded — lets Problem section rest clean and corrupt on hover (revealing the hidden threat) while Features rests noisy and resolves clean on hover (mirroring the hero's own "hover reveals truth" metaphor). Same component, opposite narrative meaning per section context.
+- Verified every hardened-reveal claim empirically rather than by code review alone — actually broke `IntersectionObserver` via Playwright and confirmed content still reached opacity 1, for both the shared hook and the bespoke How-It-Works timeline.
+
+**Problems encountered:**
+- My own regression from the prior session's perf-hedge: I'd swapped the hero shader's chromatic-aberration offset samples to a cheaper 3-octave fbm before real-hardware numbers came in. Already reverted in the code-splitting follow-up — not re-introduced here, just noting it's the same root-cause pattern (mismatched octave counts → different value distributions → color cast) as this session's CSS variable collision: two "same name, different meaning" bugs in one project.
+
+**Left incomplete:**
+- Task 11 (app frontend, 5 surfaces) — still entirely untouched, this was 100% `marketing/` polish
+- Bundle size warning persists (three.js/R3F chunk is 882KB/234KB gzip, lazy-loaded so doesn't block initial paint, but not further split within itself)
+
+**Next session should start with:**
+- Task 11 (app frontend, 5 surfaces) — marketing site is now feature-complete and quality-passed end to end
+
+---
+
+### Session 14 — 2026-07-07
+**Goal:** Marketing site (`marketing/`) — full 5-section page, Directions A+C combined, full visual fidelity
+
+**Completed:**
+- [x] Scaffolded `marketing/` — Vite + React 19 + TS + Tailwind v4, committed to a single dark theme (no light mode — deliberate, matches the shader-driven aesthetic)
+- [x] shadcn CLI wired with two registries: `@shadcn` (base primitives) and `@react-bits` (`https://reactbits.dev/r/{name}.json`, namespace is `@react-bits` with hyphen, item names need a `-TS-TW` variant suffix, e.g. `SplitText-TS-TW`) — pulled `SplitText`, `Magnet`, `DecryptedText`
+- [x] Direction A — "Signal Scanner" hero: R3F fullscreen fragment shader, 6-octave fbm static field (same octave count on every channel — see Decisions), dual-frequency scanlines, horizontal sync-glitch rows, real per-channel chromatic aberration, cursor-revealed teal "clarity" zone with selective Bloom
+- [x] Direction C — honeypot particle swarm: 4000-particle CPU physics sim (cursor repulsion, CTA magnetic attraction gated by distance, weak home-spring self-heal, velocity-based color heat-mapping teal→rust), rendered as additive-blended point sprites
+- [x] `CanvasLifecycle.tsx` — single shared `IntersectionObserver`, exactly one `<Canvas>` mounted at a time; verified via Playwright across the full 5-section scroll pass — `canvasCount` never exceeded 1 (0 on the three non-canvas sections, 1 on hero/honeypot)
+- [x] GSAP-only motion: `src/lib/motion.ts` registers `CustomEase` curves (`kavachSettle`, `kavachSpring`, `kavachDrift`); re-wrote React Bits' `Magnet` to drive via `gsap.quickTo`; new `useRevealOnView` hook (plain IntersectionObserver, not GSAP ScrollTrigger) drives every section-entrance reveal — simpler and no scroll-speed edge cases
+- [x] Mobile fallback: touch devices get `touchmove`-driven shader reveal, a scripted GSAP pull pulse on tap for the honeypot CTA, lower particle count (1500 vs 4000)
+- [x] Self-hosted real webfonts: `@fontsource-variable/bricolage-grotesque` + `@fontsource/ibm-plex-mono` (400/500/600) — confirmed via `document.fonts` that both actually register and load, and that the hero `<h1>`'s computed `font-family` resolves to Bricolage Grotesque, not a fallback
+- [x] Three more sections + nav + footer: `ProblemSection` (real threat list mapped 1:1 to the 5 backend classifiers, `DecryptedText` headline), `FeaturesSection` (the 5 real surfaces, dossier-style alternating-alignment list — deliberately not an icon/card grid), `HowItWorksSection` (3-step flow + closing CTA anchored back to the honeypot demo), `NavRail` (fixed vertical rail, scroll-spy via `useScrollSpy`, matches the 01–05 numbering used in each section's eyebrow)
+- [x] Removed the `motion` (Framer Motion) package pulled in by React Bits' `DecryptedText` — it only used `motion.span` as an unstyled wrapper with no actual animation, so swapped for a plain `<span>` rather than carrying a second animation library alongside GSAP
+
+**Decisions made:**
+- React Bits' registry is real but under-documented — namespace is `@react-bits` (hyphen), not `@reactbits`; every item needs a variant suffix (`-TS-TW`/etc.) or the URL 404s into the SPA's HTML shell instead of erroring
+- shadcn CLI's alias resolution needs `paths` in **both** `tsconfig.json` and `tsconfig.app.json` for this Vite solution-style setup — with only `tsconfig.app.json` configured, `shadcn add` silently wrote files into a literal `./@/` directory instead of `./src/`
+- R3F Canvas needs `gl={{ toneMapping: THREE.NoToneMapping, outputColorSpace: THREE.LinearSRGBColorSpace }}` whenever the fragment shader authors final display-intended colors directly — R3F's default ACES tonemapping + sRGB encode otherwise double-transforms hand-picked shader colors (near-black ink read as washed-out olive-gray until this was set)
+- Chromatic-aberration offset samples (`nr`/`nb`) must reuse the *same* fbm function/octave-count as the main channel (`n`), just spatially offset — a cheaper lower-octave fbm for the offset channels (added as a perf hedge in the first pass, before real-hardware FPS was confirmed at 115fps) has a different value distribution than the 6-octave base, which read as a persistent green/olive color cast across the whole field, not just edge fringing. Reverted once hardware confirmed headroom.
+- The teal reveal's ring + hot core were overshooting 1.0 in G/B *before* Bloom even touched them (additive stacking of glow + ring + core), which clips to neutral white regardless of how teal the source color is. Fixed by keeping every additive term's peak comfortably under 1.0 and biasing ring/core color mixes toward teal (10–20% white, not 25–35%) — Bloom's own additive halo still pushes the very center bright, but the hue now survives it.
+- Overlay copy needs an explicit scrim (linear-gradient backing) over the hero shader, and body copy uses `text-white/75` rather than the `--color-muted` token — a busy animated background defeats low-contrast gray text in a way static-background contrast checks don't catch
+- Installed Playwright as a `marketing/` devDependency purely to get real frame-timing numbers instead of "feels smooth" — flagged rather than assumed; kept `marketing/probe.mjs` (FPS + canvas-exclusivity) and `marketing/verify-full.mjs` (console-error + full 5-section canvas/nav check) as reusable regression scripts
+
+**Problems encountered / environment limits:**
+- This sandbox has NVIDIA compute access (`nvidia-smi` sees the RTX 4050) but no graphics driver path: no `/dev/dri`, no NVIDIA Vulkan ICD, no Mesa D3D12 (`dzn`) ICD despite `/dev/dxg` existing. Headless Chromium here can only use software rendering (SwiftShader) — **confirmed on Abhi's actual hardware: 115.2fps hero, 144.0fps honeypot**, both far above the 60fps target, so hardware is not a constraint.
+- A visually "garbled" honeypot headline Abhi saw did not reproduce after the font-loading fix, across several repeated instant-scroll + fast-screenshot attempts (DOM rects, opacity, and transforms all came back clean each time). Most likely explanation: caught mid-stagger during a real scroll gesture, which is expected for any per-word entrance animation. If it recurs, the robust fix is tying the reveal to `useIsCanvasActive`-style IntersectionObserver state instead of a per-word stagger.
+
+**Left incomplete:**
+- Task 11 (app frontend, 5 surfaces) still untouched — this session was entirely `marketing/`
+- Playwright's system dependencies were never installed (`--with-deps` needs root, unavailable here) — Chromium works via the manually-downloaded browser binary alone
+
+**Follow-up: code-splitting + mobile re-check (same session)**
+- [x] Code-split both R3F scenes: `SignalScannerScene` and `HoneypotSwarmScene` are now `React.lazy(() => import(...))`, wrapped in `<Suspense fallback={<Poster/>}>` inside their respective `CanvasSlot`. Since `CanvasSlot` only renders `children` once `isActive` flips true, the `import()` call — and therefore the network fetch for the whole three.js/R3F/postprocessing chunk — never fires until a canvas section is actually about to become active.
+  - Kept `import type { SwarmDrivers } from "@/scenes/HoneypotSwarmScene"` as a type-only import in `HoneypotSection.tsx` — erased at compile time (`verbatimModuleSyntax`), doesn't pull in the module at runtime, so it doesn't defeat the split.
+  - **Bundle size: initial JS 373.03 KB gzip → 119.27 KB gzip (−68%, −253.76 KB)**. Rollup automatically factored `three`/`@react-three/fiber` into their own shared async chunk (882 KB / 234 KB gzip) plus two tiny per-scene chunks (19.4 KB and 1.4 KB gzip) — none of that downloads until a canvas section activates.
+- [x] Re-verified mobile fallback with Playwright's `devices["iPhone 13"]` emulation (real `hasTouch`/`isMobile`, triggers `(hover:none)(pointer:coarse)` correctly): touch media query detected, hero copy correctly switches to "drag to reveal signal", CTA tap correctly fires the scripted pull pulse (visible as a rust-colored particle halo closing around the button in the screenshot), canvas exclusivity still holds (1) on both sections, zero console errors. `particleCount={isTouch ? 1500 : 4000}` in `HoneypotSection.tsx` confirmed untouched by the shader/color rewrites. New `marketing/verify-mobile.mjs` kept alongside `probe.mjs`/`verify-full.mjs` as a third reusable regression script (desktop FPS, full-page console/nav/canvas check, and now mobile/touch emulation).
+- [x] Re-ran `verify-full.mjs` post-split: canvas count still never exceeds 1 across all 5 sections, zero console errors, nav scroll-spy still correct.
+
+**Next session should start with:**
+- Task 11 (app frontend, 5 surfaces) — the marketing site's narrative is now complete end-to-end (hero → honeypot → problem → features → how-it-works/CTA, plus nav + footer)
 
 ---
 
