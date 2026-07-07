@@ -15,48 +15,58 @@
 
 ---
 
-## 🔴 Current Sprint — Task 4: Document / Notice OCR Verifier
+- [x] Task 4: Document/Notice OCR Verifier — `POST /classify/document`, Google Cloud Vision OCR + rule-based scam/PII analysis, 16 unit + 1 integration test, 40/40 total passing — Session 4, 2026-07-06
+  - OCR + rule-based only (no forensic manipulation detection — stated plainly in docstring and `note` field)
+  - 12 scam phrase patterns + 5 payment indicator patterns; risk HIGH/MEDIUM/LOW
+  - `bank_account` requires contextual anchor keyword; Aadhaar (12-digit) detected first, suppresses overlapping bank_account match
+  - `upi_id_or_email` label (honest: pattern matches any local@domain shape)
+  - PII: Aadhaar masked XXXX-XXXX-{last4}, PAN masked first3+XXXXXX+last1
+  - 503 fallback if `GOOGLE_APPLICATION_CREDENTIALS` not set; same lifespan pattern as other classifiers
+  - Integration test renders fake CBI notice with PIL (DejaVu 36pt), hits real Vision API, validates HIGH/MEDIUM + non-empty indicators
 
-### Task 4: Document / Notice OCR Verifier
-- [ ] Google Cloud Vision API integration
-- [ ] `/classify/document` — accepts image/PDF scan, returns OCR text + forgery flag list
-- [ ] Target: CBI/ED/RBI/TRAI notices — exactly the Digital Arrest document category
-- [ ] Unit tests mock GCP Vision; integration test uses a real scan
+- [x] Task 5: Honeypot Conversation Simulator — **FULLY CLOSED** — session-based audio-turn pipeline, 19 unit + 2 integration tests, 61/61 total passing — Sessions 5-7, 2026-07-07
+  - Scope change (approved): no Twilio/telephony; browser mic or file upload delivers audio bytes
+  - STT: `faster-whisper` base int8 (3-5× faster than openai-whisper on CPU)
+  - Persona: Gemini `gemini-2.5-flash-lite` via **Vertex AI** (migrated from AI Studio API key + deprecated `gemini-2.0-flash-lite`); uses `GOOGLE_APPLICATION_CREDENTIALS` + `GOOGLE_CLOUD_PROJECT=kavach-501620`
+  - TTS: GCP TTS `en-IN-Wavenet-B` (speaking_rate=0.85, pitch=-2.0); confirmed live — 136KB real MP3
+  - Extraction: per-turn regex (`_UPI_RE`, `_BANK_ACCOUNT_RE` imported from document.py, new `_PHONE_RE`), deduplicated accumulation across turns
+  - `/honeypot/start` → session_id; `/honeypot/converse` → full turn response; `/honeypot/report/{id}` → intelligence report
+  - `app/services/honeypot_pipeline.py` — framework-free, unit-testable without HTTP
+  - `test_integration_tts_synthesizes_real_mp3`: PASSES — real 33KB+ MP3, header `fff384c4`
+  - `test_integration_honeypot_full_pipeline`: PASSES — real STT→Vertex AI→TTS chain confirmed end-to-end
+  - STT normalization: `_SPOKEN_AT_RE` converts spoken "X at Y" → "X@Y" before UPI regex (e.g. "cbi.verify at okicici" → fires UPI signal)
 
-### Task 5: Honeypot — Twilio + Whisper + Gemini + GCP TTS
-- [ ] Twilio webhook endpoint `/honeypot/incoming`
-- [ ] Whisper STT on incoming audio chunk
-- [ ] Gemini Pro persona (confused, stalling, information-seeking character)
-- [ ] GCP TTS response back through Twilio
-- [ ] Structured intelligence report: UPI ID, phone, bank account, scripted phrases extracted
-- [ ] Tests (mock Twilio + Gemini)
+## ⚠️ POST-HACKATHON: Deactivate billing on kavach-501620
+Go to GCP console → Billing → Unlink the billing account from kavach-501620 once the hackathon is over. Free-tier APIs (Vision, TTS, Vertex AI) have monthly quotas that cover demo use but accumulate real charges under sustained load.
 
-### Task 6: Phishing Domain Checker
-- [ ] Heuristic model: domain-similarity scoring + PhishTank blocklist (cache locally, daily sync)
-- [ ] `/check/phishing` — accepts domain string, returns risk score + matched pattern
-- [ ] Tests
+- [x] Task 6: Phishing Domain Checker — `POST /check/phishing`, PhishTank blocklist + SLD-level typosquat scoring, 31 tests, 93/93 total — Session 9, 2026-07-07
+  - SLD-level SequenceMatcher + word-boundary/prefix containment — eliminates false positives on google.com/amazon.com while catching cbi-verify.gov.in/incometaxgov.in
+  - 24h local cache at `backend/data/phishtank_cache.txt`; stale fallback on fetch failure; graceful empty-set if no cache exists
+  - Risk HIGH ≥ 0.75, MEDIUM ≥ 0.55 (raised from 0.70/0.50 to eliminate false positives)
+  - googlepay.com and amazonpay.in excluded from curated list (SLD "googlepay" too close to "google")
 
-### Task 7: Fake Social Media Profile Checker
-- [ ] Heuristic feature scoring (account age, post frequency, follower/following ratio, profile completeness)
-- [ ] `/check/social-profile` — accepts profile URL or JSON blob, returns risk score
-- [ ] Tests
+- [x] Task 7: Fake Social Media Profile Checker — `POST /check/social-profile`, 16-signal heuristic, 32 tests, 125/125 total — Session 10, 2026-07-07
+  - Pure heuristic over manually-entered attributes — no scraping, no APIs; limitation stated in every note field
+  - Gov/urgency signals +4 pts (highest weight); no photo / new account / mass following / no posts +3 pts each
+  - Divide-by-zero safe, WhatsApp/Telegram exempt from post-count signals, negative counts → 422
 
-### Task 8: Digital Arrest Pattern Recognizer
-- [ ] Rule-based classifier over call transcript text
-- [ ] Rules: isolation language, fake-uniform video cues, "verification"/"bail" payment framing
-- [ ] `/check/digital-arrest` — accepts transcript string, returns match list + severity
-- [ ] Surface official line: *"No agency arrests via video call"*
-- [ ] Tests (use documented Digital Arrest playbook phrases)
+- [x] Task 8: Digital Arrest Pattern Recognizer — `POST /check/digital-arrest`, 24 tests, 149/149 total — Session 11, 2026-07-07
+  - Reused 12 scam patterns + 5 payment patterns + _ANCHOR from document.py; 3 call-specific patterns added (stay_on_line, surveillance_claim, immediate_warrant_pressure)
+  - Accepts transcript string OR session_id (pulls from honeypot session store)
+  - hard_factual_anchor present in every response; severity HIGH=scam+payment, MEDIUM=either, LOW=neither
+  - Bug fix: main.py validation handler now JSON-safe for Pydantic v2 model_validator ctx (ValueError → str)
 
-### Task 9: Evidence & Complaint Assistant
-- [ ] Template engine: NCRP (dial 1930) complaint draft + bank dispute email
-- [ ] `/assist/complaint` — accepts scan result JSON, returns pre-filled complaint text
-- [ ] Pure templating, no ML
+- [x] Task 9: Evidence & Complaint Assistant — `POST /assist/complaint`, NCRP + bank dispute templates, 29 tests, 178/178 total — Session 12, 2026-07-07
+  - Pure templating, no ML, no external API; only complaint_type required, all else optional with placeholders
+  - NCRP template: 8 sections, IT Act §66C/§66D + BNS §318/§319 citations, cybercrime.gov.in + 1930
+  - Bank dispute: RBI/2017-18/15 cited, last-4 account + UTR in subject, 5-point action request
 
-### Task 10: Family Safe-Word Vault
-- [ ] Store/retrieve household safe word (in-memory or simple file store for demo)
-- [ ] `/vault/set` and `/vault/verify` endpoints
-- [ ] Tests
+- [x] Task 10: Family Safe-Word Vault — `POST /vault/set` + `POST /vault/verify`, 21 tests, 199/199 total — Session 13, 2026-07-07
+  - File-based JSON (backend/data/vault.json, survives restart); PBKDF2-SHA256 salted hash; constant-time compare
+  - Verify-before-set → 409 (not silent false); word/hash never in any response body (regression-tested)
+  - vault.json in .gitignore; rate limit noted in every response
+
+## ✅ ALL 10 BACKEND TASKS COMPLETE — 199/199 tests passing
 
 ---
 
